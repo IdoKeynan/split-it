@@ -513,13 +513,36 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
     }
     init()
 
+    // Real-time subscriptions with polling fallback
+    let pollInterval = null
+
     const channel = sb.channel(`room:${sessionId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dishes', filter: `session_id=eq.${sessionId}` }, () => fetchDishes())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'participants', filter: `session_id=eq.${sessionId}` }, () => fetchParticipants())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'claims', filter: `session_id=eq.${sessionId}` }, () => fetchClaims())
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          if (pollInterval) { clearInterval(pollInterval); pollInterval = null }
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // Fallback: poll every 3 seconds if real-time fails
+          if (!pollInterval) {
+            pollInterval = setInterval(() => {
+              fetchDishes(); fetchParticipants(); fetchClaims()
+            }, 3000)
+          }
+        }
+      })
 
-    return () => sb.removeChannel(channel)
+    // Safety net: poll every 5s regardless (lightweight for small data)
+    const safetyPoll = setInterval(() => {
+      fetchDishes(); fetchParticipants(); fetchClaims()
+    }, 5000)
+
+    return () => {
+      sb.removeChannel(channel)
+      if (pollInterval) clearInterval(pollInterval)
+      clearInterval(safetyPoll)
+    }
   }, [sessionId, fetchDishes, fetchParticipants, fetchClaims])
 
   const items = useMemo(() => {
@@ -551,6 +574,9 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
   }, [claims, participantId, sessionId])
 
   const handleAddDish = useCallback(async (name, price) => {
+    // Optimistic update so the dish appears immediately
+    const tempDish = { id: crypto.randomUUID(), session_id: sessionId, name, price, sort_order: dishes.length }
+    setDishes(prev => [...prev, tempDish])
     await sb.from('dishes').insert({ session_id: sessionId, name, price, sort_order: dishes.length })
   }, [sessionId, dishes.length])
 
