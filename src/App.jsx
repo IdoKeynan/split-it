@@ -602,7 +602,7 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
   const handleShare = useCallback(async () => {
     const shareUrl = `${window.location.origin}?code=${sessionCode}`
     if (navigator.share) {
-      try { await navigator.share({ title: 'Split It', text: `הצטרפו לחלוקת חשבון!`, url: shareUrl }) } catch (e) {}
+      try { await navigator.share({ title: 'Split It', text: `הצטרפו לחלוקת חשבון!\n${shareUrl}` }) } catch (e) {}
     } else {
       try { await navigator.clipboard.writeText(shareUrl) } catch (e) {}
     }
