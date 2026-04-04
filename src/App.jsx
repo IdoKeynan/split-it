@@ -25,9 +25,17 @@ function generateCode() {
 // ========== LOBBY SCREEN ==========
 
 function Lobby({ onJoined }) {
-  const [mode, setMode] = useState(null)
+  // Check URL for invite code
+  const urlCode = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    const c = params.get('code')?.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || ''
+    if (c) window.history.replaceState({}, '', window.location.pathname)
+    return c
+  }, [])
+
+  const [mode, setMode] = useState(urlCode ? 'join' : null)
   const [name, setName] = useState('')
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(urlCode)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -592,9 +600,11 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
   }, [])
 
   const handleShare = useCallback(async () => {
-    try { await navigator.clipboard.writeText(sessionCode) } catch (e) {}
+    const shareUrl = `${window.location.origin}?code=${sessionCode}`
     if (navigator.share) {
-      try { await navigator.share({ title: 'Split It', text: `הצטרפו לחלוקת חשבון! קוד: ${sessionCode}` }) } catch (e) {}
+      try { await navigator.share({ title: 'Split It', text: `הצטרפו לחלוקת חשבון!`, url: shareUrl }) } catch (e) {}
+    } else {
+      try { await navigator.clipboard.writeText(shareUrl) } catch (e) {}
     }
     setShowToast(true)
     setTimeout(() => setShowToast(false), 3000)
