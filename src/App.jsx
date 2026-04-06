@@ -496,6 +496,68 @@ function AddDishForm({ onAdd, lang }) {
   )
 }
 
+function ScanPreview({ scannedDishes, onConfirm, onCancel, onRemoveItem, onUpdateItem, lang }) {
+  const currency = t(lang, 'currency')
+  return (
+    <div className="bg-white rounded-2xl p-4 shadow-sm border-2 border-blue-300">
+      <div className="flex items-center gap-2 mb-3">
+        <h3 className="font-semibold text-gray-900 text-sm flex-1">
+          {t(lang, 'scanPreviewTitle')} ({scannedDishes.length})
+        </h3>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div className="space-y-2 max-h-64 overflow-y-auto">
+        {scannedDishes.map((dish, i) => (
+          <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+            <input
+              type="text"
+              value={dish.name}
+              onChange={e => onUpdateItem(i, { ...dish, name: e.target.value })}
+              className="flex-1 bg-transparent text-sm font-medium text-gray-800 focus:outline-none"
+            />
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                value={dish.price}
+                onChange={e => onUpdateItem(i, { ...dish, price: parseFloat(e.target.value) || 0 })}
+                className="w-16 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+              <span className="text-xs text-gray-500">{currency}</span>
+            </div>
+            <button
+              onClick={() => onRemoveItem(i)}
+              className="text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2 mt-3">
+        <button
+          onClick={onCancel}
+          className="flex-1 bg-gray-100 text-gray-600 font-semibold py-2 rounded-xl transition-all active:scale-95"
+        >
+          {t(lang, 'scanCancel')}
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={scannedDishes.length === 0}
+          className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold py-2 rounded-xl transition-all active:scale-95 shadow-md shadow-blue-500/25"
+        >
+          {t(lang, 'scanAddAll')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function TotalSummary({ subtotal, tipAmount, total, lang }) {
   const roundedTotal = Math.round(total)
   const currency = t(lang, 'currency')
@@ -529,6 +591,9 @@ function BillScreen({ sessionId, participantId, sessionCode, lang, onLeave }) {
   const [tip, setTip] = useState({ type: 'percent', value: 10 })
   const [loading, setLoading] = useState(true)
   const [showToast, setShowToast] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState('')
+  const [scannedDishes, setScannedDishes] = useState(null) // null = not scanning, [] = no results
 
   const { dir } = getLangConfig(lang)
 
@@ -640,6 +705,68 @@ function BillScreen({ sessionId, participantId, sessionCode, lang, onLeave }) {
     setTimeout(() => setShowToast(false), 3000)
   }, [sessionCode, lang])
 
+  const handleScanReceipt = useCallback(async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setScanning(true)
+    setScanError('')
+    setScannedDishes(null)
+
+    try {
+      // Convert file to base64
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1]) // strip data:image/...;base64,
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const res = await fetch('/api/scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, lang }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setScanError(t(lang, 'scanError'))
+      } else if (!data.dishes || data.dishes.length === 0) {
+        setScanError(t(lang, 'scanEmpty'))
+      } else {
+        setScannedDishes(data.dishes)
+      }
+    } catch (err) {
+      console.error('Scan error:', err)
+      setScanError(t(lang, 'scanError'))
+    } finally {
+      setScanning(false)
+      // Reset the file input so the same file can be re-selected
+      e.target.value = ''
+    }
+  }, [lang])
+
+  const handleConfirmScan = useCallback(async () => {
+    if (!scannedDishes || scannedDishes.length === 0) return
+    // Add all scanned dishes to the session
+    const startOrder = dishes.length
+    const newDishes = scannedDishes.map((d, i) => ({
+      session_id: sessionId,
+      name: d.name,
+      price: d.price,
+      sort_order: startOrder + i,
+    }))
+
+    // Optimistic update
+    const tempDishes = newDishes.map(d => ({ ...d, id: crypto.randomUUID() }))
+    setDishes(prev => [...prev, ...tempDishes])
+    setScannedDishes(null)
+
+    // Insert to Supabase
+    await sb.from('dishes').insert(newDishes)
+  }, [scannedDishes, dishes.length, sessionId])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -706,6 +833,41 @@ function BillScreen({ sessionId, participantId, sessionCode, lang, onLeave }) {
             />
           ))}
           <AddDishForm onAdd={handleAddDish} lang={lang} />
+
+          {/* Scan Receipt Button */}
+          <label className={`w-full bg-blue-500 hover:bg-blue-600 text-white rounded-2xl p-3 shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer ${scanning ? 'opacity-60 pointer-events-none' : ''}`}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span className="font-medium">
+              {scanning ? t(lang, 'scanning') : t(lang, 'scanReceipt')}
+            </span>
+            {scanning && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleScanReceipt}
+              className="hidden"
+              disabled={scanning}
+            />
+          </label>
+
+          {scanError && (
+            <p className="text-red-500 text-sm text-center">{scanError}</p>
+          )}
+
+          {scannedDishes && scannedDishes.length > 0 && (
+            <ScanPreview
+              scannedDishes={scannedDishes}
+              onConfirm={handleConfirmScan}
+              onCancel={() => setScannedDishes(null)}
+              onRemoveItem={(i) => setScannedDishes(prev => prev.filter((_, idx) => idx !== i))}
+              onUpdateItem={(i, updated) => setScannedDishes(prev => prev.map((d, idx) => idx === i ? updated : d))}
+              lang={lang}
+            />
+          )}
         </div>
 
         <TipSection tip={tip} onTipChange={setTip} lang={lang} />

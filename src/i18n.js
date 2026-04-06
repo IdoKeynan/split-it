@@ -52,6 +52,15 @@ const translations = {
     toPay: 'לתשלום',
     // Share
     shareText: 'הצטרפו לחלוקת חשבון!',
+    // OCR
+    scanReceipt: 'סרוק חשבון',
+    scanning: 'סורק...',
+    scanError: 'שגיאה בסריקה, נסו שוב',
+    scanEmpty: 'לא נמצאו מנות בתמונה',
+    scanPreviewTitle: 'מנות שנמצאו',
+    scanAddAll: 'הוסף הכל',
+    scanCancel: 'ביטול',
+    scanRemoveItem: 'הסר',
   },
   en: {
     dir: 'ltr',
@@ -106,6 +115,15 @@ const translations = {
     toPay: 'To Pay',
     // Share
     shareText: 'Join our bill split!',
+    // OCR
+    scanReceipt: 'Scan Receipt',
+    scanning: 'Scanning...',
+    scanError: 'Scan failed, try again',
+    scanEmpty: 'No dishes found in image',
+    scanPreviewTitle: 'Dishes Found',
+    scanAddAll: 'Add All',
+    scanCancel: 'Cancel',
+    scanRemoveItem: 'Remove',
   },
 }
 
