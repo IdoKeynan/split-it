@@ -709,12 +709,25 @@ function BillScreen({ sessionId, participantId, sessionCode, lang, onLeave }) {
     setScannedDishes(null)
 
     try {
-      // Convert file to base64
+      // Compress image to fit Vercel's 4.5MB body limit
       const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result.split(',')[1]) // strip data:image/...;base64,
-        reader.onerror = reject
-        reader.readAsDataURL(file)
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          const MAX = 1500 // max dimension in pixels
+          let { width, height } = img
+          if (width > MAX || height > MAX) {
+            if (width > height) { height = Math.round(height * MAX / width); width = MAX }
+            else { width = Math.round(width * MAX / height); height = MAX }
+          }
+          canvas.width = width
+          canvas.height = height
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
+          resolve(dataUrl.split(',')[1])
+        }
+        img.onerror = reject
+        img.src = URL.createObjectURL(file)
       })
 
       const res = await fetch('/api/scan-receipt', {
