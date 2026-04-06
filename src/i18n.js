@@ -35,8 +35,8 @@ const translations = {
     person: 'אדם',
     people: 'אנשים',
     myShare: 'החלק שלי:',
-    claimed: '✓ שלי',
-    claimIt: 'זה שלי',
+    claimed: '✓ בפנים',
+    claimIt: 'צרף אותי',
     // Tip
     tip: 'טיפ',
     tipAmount: 'סכום',
@@ -98,8 +98,8 @@ const translations = {
     person: 'person',
     people: 'people',
     myShare: 'My share:',
-    claimed: '✓ Mine',
-    claimIt: 'Mine',
+    claimed: '✓ I\'m in!',
+    claimIt: 'Count me in',
     // Tip
     tip: 'Tip',
     tipAmount: 'Amount',

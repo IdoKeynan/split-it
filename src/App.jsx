@@ -321,11 +321,6 @@ function ItemCard({ item, currentUser, participants, onToggleClaim, onUpdatePric
                 {lang === 'en' ? `${currency}${price}` : `${price} ${currency}`}
               </button>
             )}
-            {totalSharers > 0 && (
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                {totalSharers} {totalSharers === 1 ? t(lang, 'person') : t(lang, 'people')}
-              </span>
-            )}
           </div>
           {otherClaimers.length > 0 && (
             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
@@ -344,7 +339,7 @@ function ItemCard({ item, currentUser, participants, onToggleClaim, onUpdatePric
         </div>
         <button
           onClick={() => onToggleClaim(item.id)}
-          className={`shrink-0 w-20 h-10 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-95 ${
+          className={`shrink-0 ${lang === 'en' ? 'w-28' : 'w-24'} h-10 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-95 ${
             isClaimed
               ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25'
               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
