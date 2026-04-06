@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { sb } from './lib/supabase'
+import { t, getLangConfig } from './i18n'
 
 // --- Constants ---
 const COLORS = ['emerald', 'violet', 'amber', 'blue', 'rose', 'cyan', 'pink', 'indigo']
@@ -36,8 +37,12 @@ function Lobby({ onJoined }) {
   const [mode, setMode] = useState(urlCode ? 'join' : null)
   const [name, setName] = useState('')
   const [code, setCode] = useState(urlCode)
+  const [lang, setLang] = useState('he')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Lobby always shows both languages, so we use a simple helper
+  const lobbyLang = mode === 'join' ? 'he' : lang // join screen: we don't know room lang yet
 
   const handleCreate = async () => {
     if (!name.trim()) return
@@ -46,7 +51,7 @@ function Lobby({ onJoined }) {
     try {
       const sessionCode = generateCode()
       const { data: session, error: err } = await sb
-        .from('sessions').insert({ code: sessionCode }).select().single()
+        .from('sessions').insert({ code: sessionCode, lang }).select().single()
       if (err) throw err
 
       const { data: participant, error: pErr } = await sb
@@ -62,12 +67,13 @@ function Lobby({ onJoined }) {
         participantId: participant.id,
         sessionCode: session.code,
         participantName: name.trim(),
+        lang: session.lang || 'he',
       }
       sessionStorage.setItem('splitit_session', JSON.stringify(data))
       onJoined(data)
     } catch (e) {
       console.error(e)
-      setError('שגיאה ביצירת חדר, נסו שוב')
+      setError(t(lang, 'errorCreate'))
       setLoading(false)
     }
   }
@@ -80,7 +86,7 @@ function Lobby({ onJoined }) {
       const { data: session, error: err } = await sb
         .from('sessions').select().eq('code', code.toUpperCase().trim()).single()
       if (err || !session) {
-        setError('קוד חדר לא נמצא')
+        setError(t('he', 'errorCodeNotFound'))
         setLoading(false)
         return
       }
@@ -103,12 +109,13 @@ function Lobby({ onJoined }) {
         participantId: participant.id,
         sessionCode: session.code,
         participantName: name.trim(),
+        lang: session.lang || 'he',
       }
       sessionStorage.setItem('splitit_session', JSON.stringify(data))
       onJoined(data)
     } catch (e) {
       console.error(e)
-      setError('שגיאה בהצטרפות לחדר')
+      setError(t('he', 'errorJoin'))
       setLoading(false)
     }
   }
@@ -161,6 +168,26 @@ function Lobby({ onJoined }) {
           {mode === 'create' ? 'צור חדר חדש' : 'הצטרף לחדר'}
         </h2>
         <div className="space-y-3">
+          {mode === 'create' && (
+            <div className="flex bg-gray-100 rounded-xl p-1">
+              <button
+                onClick={() => setLang('he')}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                  lang === 'he' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                }`}
+              >
+                🇮🇱 עברית
+              </button>
+              <button
+                onClick={() => setLang('en')}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                  lang === 'en' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                }`}
+              >
+                🇺🇸 English
+              </button>
+            </div>
+          )}
           {mode === 'join' && (
             <input
               type="text"
@@ -176,7 +203,7 @@ function Lobby({ onJoined }) {
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
-            placeholder="השם שלך"
+            placeholder={mode === 'create' ? t(lang, 'namePlaceholder') : 'השם שלך'}
             autoFocus={mode === 'create'}
             className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3.5 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
           />
@@ -189,10 +216,10 @@ function Lobby({ onJoined }) {
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                רגע...
+                {t(lang, 'loading')}
               </span>
             ) : (
-              mode === 'create' ? 'יאללה, נתחיל!' : 'הצטרף'
+              mode === 'create' ? t(lang, 'letsGo') : 'הצטרף'
             )}
           </button>
         </div>
@@ -203,7 +230,7 @@ function Lobby({ onJoined }) {
 
 // ========== SHARED UI COMPONENTS ==========
 
-function Header({ sessionCode, onShare, onLeave }) {
+function Header({ sessionCode, onShare, onLeave, lang }) {
   return (
     <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-gray-200">
       <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
@@ -215,7 +242,7 @@ function Header({ sessionCode, onShare, onLeave }) {
           </button>
           <div>
             <h1 className="text-xl font-bold text-gray-900">Split It</h1>
-            <p className="text-xs text-gray-500">חלוקת חשבון חכמה</p>
+            <p className="text-xs text-gray-500">{t(lang, 'headerSubtitle')}</p>
           </div>
         </div>
         <button
@@ -225,31 +252,32 @@ function Header({ sessionCode, onShare, onLeave }) {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
           </svg>
-          שתף קוד
+          {t(lang, 'shareCode')}
         </button>
       </div>
     </div>
   )
 }
 
-function ShareToast({ code, visible }) {
+function ShareToast({ code, visible, lang }) {
   return (
     <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}`}>
       <div className="bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
-        <span className="text-sm">הקוד הועתק!</span>
+        <span className="text-sm">{t(lang, 'codeCopied')}</span>
         <span className="font-mono font-bold text-lg tracking-widest text-emerald-400">{code}</span>
       </div>
     </div>
   )
 }
 
-function ItemCard({ item, currentUser, participants, onToggleClaim, onUpdatePrice, onRemove }) {
+function ItemCard({ item, currentUser, participants, onToggleClaim, onUpdatePrice, onRemove, lang }) {
   const [editingPrice, setEditingPrice] = useState(false)
   const [priceInput, setPriceInput] = useState(String(item.price))
   const isClaimed = item.claimedBy.includes(currentUser)
   const totalSharers = item.claimedBy.length
   const price = Number(item.price)
   const myShare = isClaimed && totalSharers > 0 ? price / totalSharers : 0
+  const currency = t(lang, 'currency')
   const otherClaimers = item.claimedBy
     .filter(id => id !== currentUser)
     .map(id => participants.find(p => p.id === id))
@@ -265,7 +293,7 @@ function ItemCard({ item, currentUser, participants, onToggleClaim, onUpdatePric
     <div className={`relative bg-white rounded-2xl p-4 shadow-sm transition-all duration-200 border-2 ${isClaimed ? 'border-emerald-400 shadow-emerald-100 shadow-md' : 'border-transparent'}`}>
       <button
         onClick={() => onRemove(item.id)}
-        className="absolute top-2 left-2 w-6 h-6 rounded-full bg-gray-100 hover:bg-red-100 text-gray-400 hover:text-red-500 flex items-center justify-center transition-colors"
+        className={`absolute top-2 ${lang === 'he' ? 'left-2' : 'right-2'} w-6 h-6 rounded-full bg-gray-100 hover:bg-red-100 text-gray-400 hover:text-red-500 flex items-center justify-center transition-colors`}
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -286,16 +314,16 @@ function ItemCard({ item, currentUser, participants, onToggleClaim, onUpdatePric
                   onKeyDown={e => e.key === 'Enter' && handlePriceSave()}
                   className="w-20 text-lg font-bold text-gray-800 bg-gray-50 border border-emerald-300 rounded-lg px-2 py-0.5 text-center focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 />
-                <span className="text-lg font-bold text-gray-800">₪</span>
+                <span className="text-lg font-bold text-gray-800">{currency}</span>
               </div>
             ) : (
               <button onClick={() => { setPriceInput(String(price)); setEditingPrice(true) }} className="text-lg font-bold text-gray-800 hover:text-emerald-600 transition-colors border-b border-dashed border-gray-300">
-                {price} ₪
+                {lang === 'en' ? `${currency}${price}` : `${price} ${currency}`}
               </button>
             )}
             {totalSharers > 0 && (
               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                {totalSharers} {totalSharers === 1 ? 'אדם' : 'אנשים'}
+                {totalSharers} {totalSharers === 1 ? t(lang, 'person') : t(lang, 'people')}
               </span>
             )}
           </div>
@@ -310,7 +338,7 @@ function ItemCard({ item, currentUser, participants, onToggleClaim, onUpdatePric
           )}
           {isClaimed && totalSharers > 0 && (
             <div className="mt-1 text-sm text-emerald-600 font-medium">
-              החלק שלי: {myShare.toFixed(myShare % 1 === 0 ? 0 : 2)} ₪
+              {t(lang, 'myShare')} {lang === 'en' ? `${currency}${myShare.toFixed(myShare % 1 === 0 ? 0 : 2)}` : `${myShare.toFixed(myShare % 1 === 0 ? 0 : 2)} ${currency}`}
             </div>
           )}
         </div>
@@ -322,17 +350,18 @@ function ItemCard({ item, currentUser, participants, onToggleClaim, onUpdatePric
               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
         >
-          {isClaimed ? '✓ שלי' : 'זה שלי'}
+          {isClaimed ? t(lang, 'claimed') : t(lang, 'claimIt')}
         </button>
       </div>
     </div>
   )
 }
 
-function TipSection({ tip, onTipChange }) {
+function TipSection({ tip, onTipChange, lang }) {
+  const currency = t(lang, 'currency')
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm">
-      <h3 className="font-semibold text-gray-900 mb-3">טיפ</h3>
+      <h3 className="font-semibold text-gray-900 mb-3">{t(lang, 'tip')}</h3>
       <div className="flex items-center gap-2">
         <div className="flex bg-gray-100 rounded-xl p-1 shrink-0">
           <button
@@ -349,7 +378,7 @@ function TipSection({ tip, onTipChange }) {
               tip.type === 'fixed' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
             }`}
           >
-            ₪
+            {currency}
           </button>
         </div>
         {tip.type === 'percent' ? (
@@ -380,7 +409,7 @@ function TipSection({ tip, onTipChange }) {
                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                {amount}₪
+                {amount}{currency}
               </button>
             ))}
           </div>
@@ -392,7 +421,7 @@ function TipSection({ tip, onTipChange }) {
             value={tip.value || ''}
             onChange={e => onTipChange({ ...tip, value: parseFloat(e.target.value) || 0 })}
             className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
-            placeholder="סכום"
+            placeholder={t(lang, 'tipAmount')}
           />
         </div>
       </div>
@@ -400,7 +429,7 @@ function TipSection({ tip, onTipChange }) {
   )
 }
 
-function AddDishForm({ onAdd }) {
+function AddDishForm({ onAdd, lang }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
@@ -424,7 +453,7 @@ function AddDishForm({ onAdd }) {
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
-        <span className="font-medium">הוסף מנה</span>
+        <span className="font-medium">{t(lang, 'addDish')}</span>
       </button>
     )
   }
@@ -432,7 +461,7 @@ function AddDishForm({ onAdd }) {
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm border-2 border-emerald-300">
       <div className="flex items-center gap-2 mb-3">
-        <h3 className="font-semibold text-gray-900 text-sm flex-1">מנה חדשה</h3>
+        <h3 className="font-semibold text-gray-900 text-sm flex-1">{t(lang, 'newDish')}</h3>
         <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -445,14 +474,14 @@ function AddDishForm({ onAdd }) {
           autoFocus
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="שם המנה"
+          placeholder={t(lang, 'dishName')}
           className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
         />
         <input
           type="number"
           value={price}
           onChange={e => setPrice(e.target.value)}
-          placeholder="מחיר"
+          placeholder={t(lang, 'price')}
           className="w-20 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
         />
       </div>
@@ -461,29 +490,31 @@ function AddDishForm({ onAdd }) {
         disabled={!name.trim() || !parseFloat(price)}
         className="w-full mt-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold py-2 rounded-xl transition-all active:scale-95"
       >
-        הוסף
+        {t(lang, 'add')}
       </button>
     </div>
   )
 }
 
-function TotalSummary({ subtotal, tipAmount, total }) {
+function TotalSummary({ subtotal, tipAmount, total, lang }) {
   const roundedTotal = Math.round(total)
+  const currency = t(lang, 'currency')
+  const fmtPrice = (val) => lang === 'en' ? `${currency}${val}` : `${val} ${currency}`
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm mt-2 mb-4">
       <div className="flex items-center justify-between text-sm text-gray-500 mb-2">
-        <span>סה"כ מנות</span>
-        <span>{subtotal.toFixed(2)} ₪</span>
+        <span>{t(lang, 'totalDishes')}</span>
+        <span>{fmtPrice(subtotal.toFixed(2))}</span>
       </div>
       {tipAmount > 0 && (
         <div className="flex items-center justify-between text-sm text-gray-500 mb-2">
-          <span>טיפ</span>
-          <span>+{tipAmount.toFixed(2)} ₪</span>
+          <span>{t(lang, 'tipLabel')}</span>
+          <span>+{fmtPrice(tipAmount.toFixed(2))}</span>
         </div>
       )}
       <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-        <span className="text-lg font-bold text-gray-900">לתשלום</span>
-        <span className="text-3xl font-extrabold text-emerald-600">{roundedTotal} ₪</span>
+        <span className="text-lg font-bold text-gray-900">{t(lang, 'toPay')}</span>
+        <span className="text-3xl font-extrabold text-emerald-600">{fmtPrice(roundedTotal)}</span>
       </div>
     </div>
   )
@@ -491,13 +522,15 @@ function TotalSummary({ subtotal, tipAmount, total }) {
 
 // ========== BILL SCREEN (Real-time Supabase) ==========
 
-function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
+function BillScreen({ sessionId, participantId, sessionCode, lang, onLeave }) {
   const [dishes, setDishes] = useState([])
   const [participants, setParticipants] = useState([])
   const [claims, setClaims] = useState([])
   const [tip, setTip] = useState({ type: 'percent', value: 10 })
   const [loading, setLoading] = useState(true)
   const [showToast, setShowToast] = useState(false)
+
+  const { dir } = getLangConfig(lang)
 
   const fetchDishes = useCallback(async () => {
     const { data } = await sb.from('dishes').select('*').eq('session_id', sessionId).order('sort_order')
@@ -532,7 +565,6 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
         if (status === 'SUBSCRIBED') {
           if (pollInterval) { clearInterval(pollInterval); pollInterval = null }
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          // Fallback: poll every 3 seconds if real-time fails
           if (!pollInterval) {
             pollInterval = setInterval(() => {
               fetchDishes(); fetchParticipants(); fetchClaims()
@@ -541,7 +573,6 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
         }
       })
 
-    // Safety net: poll every 5s regardless (lightweight for small data)
     const safetyPoll = setInterval(() => {
       fetchDishes(); fetchParticipants(); fetchClaims()
     }, 5000)
@@ -582,7 +613,6 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
   }, [claims, participantId, sessionId])
 
   const handleAddDish = useCallback(async (name, price) => {
-    // Optimistic update so the dish appears immediately
     const tempDish = { id: crypto.randomUUID(), session_id: sessionId, name, price, sort_order: dishes.length }
     setDishes(prev => [...prev, tempDish])
     await sb.from('dishes').insert({ session_id: sessionId, name, price, sort_order: dishes.length })
@@ -602,46 +632,46 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
   const handleShare = useCallback(async () => {
     const shareUrl = `${window.location.origin}?code=${sessionCode}`
     if (navigator.share) {
-      try { await navigator.share({ title: 'Split It', text: `הצטרפו לחלוקת חשבון!\n${shareUrl}` }) } catch (e) {}
+      try { await navigator.share({ title: 'Split It', text: `${t(lang, 'shareText')}\n${shareUrl}` }) } catch (e) {}
     } else {
       try { await navigator.clipboard.writeText(shareUrl) } catch (e) {}
     }
     setShowToast(true)
     setTimeout(() => setShowToast(false), 3000)
-  }, [sessionCode])
+  }, [sessionCode, lang])
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-gray-500 text-sm">טוען את החדר...</p>
+          <p className="text-gray-500 text-sm">{t(lang, 'loadingRoom')}</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-6">
-      <Header sessionCode={sessionCode} onShare={handleShare} onLeave={onLeave} />
-      <ShareToast code={sessionCode} visible={showToast} />
+    <div className="min-h-screen bg-gray-50 pb-6" dir={dir}>
+      <Header sessionCode={sessionCode} onShare={handleShare} onLeave={onLeave} lang={lang} />
+      <ShareToast code={sessionCode} visible={showToast} lang={lang} />
 
       <div className="max-w-md mx-auto px-4 py-4 space-y-3">
-        <div className="bg-gradient-to-l from-emerald-500 to-teal-600 rounded-2xl p-4 text-white">
+        <div className={`bg-gradient-to-${lang === 'he' ? 'l' : 'r'} from-emerald-500 to-teal-600 rounded-2xl p-4 text-white`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm opacity-80">קוד חדר</p>
-              <p className="text-2xl font-mono font-bold tracking-widest">{sessionCode}</p>
+              <p className="text-sm opacity-80">{t(lang, 'roomCode')}</p>
+              <p className="text-2xl font-mono font-bold tracking-widest" dir="ltr">{sessionCode}</p>
             </div>
-            <div className="text-left">
-              <p className="text-sm opacity-80">פריטים</p>
+            <div className={lang === 'he' ? 'text-left' : 'text-right'}>
+              <p className="text-sm opacity-80">{t(lang, 'items')}</p>
               <p className="text-2xl font-bold">{items.length}</p>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-2xl p-3 shadow-sm">
-          <p className="text-xs text-gray-500 mb-2">משתתפים ({participants.length})</p>
+          <p className="text-xs text-gray-500 mb-2">{t(lang, 'participants')} ({participants.length})</p>
           <div className="flex gap-2 flex-wrap">
             {participants.map(p => {
               const cls = COLOR_CLASSES[p.color] || COLOR_CLASSES.gray
@@ -649,7 +679,7 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
               return (
                 <div key={p.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${cls} ${isMe ? 'ring-2' : ''}`}>
                   <span>{p.name}</span>
-                  {isMe && <span className="text-xs opacity-60">(אני)</span>}
+                  {isMe && <span className="text-xs opacity-60">{t(lang, 'me')}</span>}
                 </div>
               )
             })}
@@ -659,8 +689,8 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
         <div className="space-y-2">
           {items.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-gray-400 text-lg mb-1">אין עדיין מנות</p>
-              <p className="text-gray-300 text-sm">הוסיפו מנות כדי להתחיל לחלק</p>
+              <p className="text-gray-400 text-lg mb-1">{t(lang, 'noDishes')}</p>
+              <p className="text-gray-300 text-sm">{t(lang, 'noDishesHint')}</p>
             </div>
           )}
           {items.map(item => (
@@ -672,13 +702,14 @@ function BillScreen({ sessionId, participantId, sessionCode, onLeave }) {
               onToggleClaim={handleToggleClaim}
               onUpdatePrice={handleUpdatePrice}
               onRemove={handleRemoveDish}
+              lang={lang}
             />
           ))}
-          <AddDishForm onAdd={handleAddDish} />
+          <AddDishForm onAdd={handleAddDish} lang={lang} />
         </div>
 
-        <TipSection tip={tip} onTipChange={setTip} />
-        <TotalSummary subtotal={subtotal} tipAmount={tipAmount} total={total} />
+        <TipSection tip={tip} onTipChange={setTip} lang={lang} />
+        <TotalSummary subtotal={subtotal} tipAmount={tipAmount} total={total} lang={lang} />
       </div>
     </div>
   )
@@ -695,9 +726,9 @@ export default function App() {
     if (saved) {
       try {
         const data = JSON.parse(saved)
-        sb.from('sessions').select('id').eq('id', data.sessionId).single().then(({ data: session, error }) => {
+        sb.from('sessions').select('id, lang').eq('id', data.sessionId).single().then(({ data: session, error }) => {
           if (session && !error) {
-            setSessionData(data)
+            setSessionData({ ...data, lang: session.lang || data.lang || 'he' })
             setScreen('bill')
           } else {
             sessionStorage.removeItem('splitit_session')
@@ -741,6 +772,7 @@ export default function App() {
       sessionId={sessionData.sessionId}
       participantId={sessionData.participantId}
       sessionCode={sessionData.sessionCode}
+      lang={sessionData.lang || 'he'}
       onLeave={handleLeave}
     />
   )
