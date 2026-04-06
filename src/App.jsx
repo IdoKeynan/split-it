@@ -741,7 +741,7 @@ function BillScreen({ sessionId, participantId, sessionCode, lang, onLeave }) {
       if (!res.ok) {
         setScanError(t(lang, 'scanError'))
       } else if (!data.dishes || data.dishes.length === 0) {
-        setScanError(t(lang, 'scanEmpty'))
+        setScanError(data.rawText ? `${t(lang, 'scanEmpty')}\n\nOCR: "${data.rawText}"` : t(lang, 'scanEmpty'))
       } else {
         setScannedDishes(data.dishes)
       }
@@ -863,7 +863,7 @@ function BillScreen({ sessionId, participantId, sessionCode, lang, onLeave }) {
           </label>
 
           {scanError && (
-            <p className="text-red-500 text-sm text-center">{scanError}</p>
+            <p className="text-red-500 text-sm text-center whitespace-pre-wrap break-words">{scanError}</p>
           )}
 
           {scannedDishes && scannedDishes.length > 0 && (

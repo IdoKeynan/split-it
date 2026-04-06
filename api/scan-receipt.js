@@ -56,7 +56,8 @@ export default async function handler(req, res) {
     // Parse the OCR text into dishes
     const dishes = parseReceiptText(fullText, lang)
 
-    return res.status(200).json({ dishes, rawText: fullText })
+    // Debug: if no dishes found, return raw text so we can diagnose
+    return res.status(200).json({ dishes, rawText: fullText, debug: dishes.length === 0 })
   } catch (err) {
     console.error('Scan error:', err)
     return res.status(500).json({ error: 'Scan failed' })
